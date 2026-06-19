@@ -97,21 +97,17 @@ def search_jobs(query: str, source_name: str, site_filter: str) -> list[dict]:
     response.raise_for_status()
     data = response.json()
 
-    # Debug — print keys from first job to confirm field names (remove after confirming)
-    if data.get("jobs_results"):
-        first = data["jobs_results"][0]
-        print("  DEBUG job keys:", list(first.keys()))
-        print("  DEBUG apply_options:", first.get("apply_options", []))
-        print("  DEBUG related_links:", first.get("related_links", []))
+
 
     jobs = []
     for job in data.get("jobs_results", []):
-        # SerpAPI returns links in multiple places — try each in order
+        # Prefer apply_options links (direct to job board) over Google Jobs links
+        apply_options = job.get("apply_options", [])
         link = (
+            apply_options[0].get("link", "") if apply_options else None or
             job.get("job_link") or
             job.get("link") or
             (job.get("related_links") or [{}])[0].get("link", "") or
-            (job.get("apply_options") or [{}])[0].get("link", "") or
             ""
         )
         jobs.append({
@@ -246,4 +242,13 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    import tailor
+    import notify
+
+    scored_jobs, output_file = run()
+
+    print("\n=== Starting tailor.py ===")
+    tailor_results = tailor.run(scored_jobs)
+
+    print("\n=== Starting notify.py ===")
+    notify.run(tailor_results, scored_jobs)
