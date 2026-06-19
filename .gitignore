@@ -1,0 +1,13 @@
+# Environment variables — never commit these
+.env
+
+# Generated output files
+*.json
+*.docx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
