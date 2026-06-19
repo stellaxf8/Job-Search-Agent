@@ -7,7 +7,7 @@ using SerpAPI, then scores each result against your resume using Claude.
 Requirements:
     pip install requests anthropic python-dotenv
 
-Environment variables (set in Replit Secrets):
+Environment variables (set in GitHub Secrets):
     SERP_API_KEY   — your SerpAPI key
     ANTHROPIC_API_KEY — your Anthropic API key
 """
@@ -19,29 +19,29 @@ import anthropic
 from datetime import datetime
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
-SERP_API_KEY = os.getenv("5214cb40f8294f9291ff3cb1f8aea94c79be5caf7f208b098ebf712573d924b0")
-ANTHROPIC_API_KEY = os.getenv("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
-")
+SERP_API_KEY = os.getenv("SERP_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 SEARCH_QUERIES = [
-    "AI Business Analyst",
-    "AI ML Business Analyst",
-    "AI Analyst",
-    "AI Product Analyst",
-    "AI Engineer Business Analyst",
+    "AI Business Analyst entry level",
+    "AI Business Analyst junior",
+    "AI ML Business Analyst entry level",
+    "AI Analyst entry level",
+    "AI Analyst junior",
+    "AI Product Analyst entry level",
+    "AI Engineer Business Analyst entry level",
 ]
 
-LOCATION = "Vancouver, BC"
+LOCATION_QUERY = "Vancouver"           # appended to each search query
+LOCATION_PARAM = "Vancouver, British Columbia, Canada"  # SerpAPI location param
 RESULTS_PER_QUERY = 10  # SerpAPI returns up to 10 per call
 
 SOURCES = {
-    "linkedin":  "site:linkedin.com/jobs",
-    "indeed":    "site:indeed.com",
-    "glassdoor": "site:glassdoor.com/job-listing",
+    "google_jobs": "",  # No site filter — let Google Jobs return results from all boards
 }
 
 # Paste your resume text here (plain text, no formatting needed)
@@ -88,8 +88,8 @@ def search_jobs(query: str, source_name: str, site_filter: str) -> list[dict]:
     """Calls SerpAPI Google Jobs search and returns a list of job dicts."""
     params = {
         "engine": "google_jobs",
-        "q": f"{query} {LOCATION} {site_filter}",
-        "location": LOCATION,
+        "q": f"{query} {LOCATION_QUERY}".strip(),
+        "location": LOCATION_PARAM,
         "api_key": SERP_API_KEY,
         "num": RESULTS_PER_QUERY,
     }
@@ -97,14 +97,29 @@ def search_jobs(query: str, source_name: str, site_filter: str) -> list[dict]:
     response.raise_for_status()
     data = response.json()
 
+    # Debug — print keys from first job to confirm field names (remove after confirming)
+    if data.get("jobs_results"):
+        first = data["jobs_results"][0]
+        print("  DEBUG job keys:", list(first.keys()))
+        print("  DEBUG apply_options:", first.get("apply_options", []))
+        print("  DEBUG related_links:", first.get("related_links", []))
+
     jobs = []
     for job in data.get("jobs_results", []):
+        # SerpAPI returns links in multiple places — try each in order
+        link = (
+            job.get("job_link") or
+            job.get("link") or
+            (job.get("related_links") or [{}])[0].get("link", "") or
+            (job.get("apply_options") or [{}])[0].get("link", "") or
+            ""
+        )
         jobs.append({
             "title":       job.get("title", ""),
             "company":     job.get("company_name", ""),
             "location":    job.get("location", ""),
-            "description": job.get("description", "")[:2000],  # cap for token efficiency
-            "link":        job.get("related_links", [{}])[0].get("link", ""),
+            "description": job.get("description", "")[:2000],
+            "link":        link,
             "source":      source_name,
             "posted_at":   job.get("detected_extensions", {}).get("posted_at", ""),
             "query":       query,
@@ -151,6 +166,9 @@ Title: {job['title']}
 Company: {job['company']}
 Location: {job['location']}
 Description: {job['description']}
+
+Rules:
+- If the job title or description indicates a Senior, Lead, Principal, or Director level role, set match_score below 40.
 
 Return ONLY a JSON object with these exact keys:
 {{
